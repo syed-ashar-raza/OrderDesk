@@ -1,0 +1,10 @@
+﻿# Escalation Policy
+This is a fictional policy for the OrderDesk demonstration.
+
+- Escalate shipments that remain undelivered more than 7 business days after their estimated delivery date.
+- Escalate suspected duplicate charges that remain unresolved after the normal payment-provider processing window.
+- Escalate damaged, defective, or incorrect items for support-team review.
+- Escalate account access issues involving suspected unauthorized access immediately.
+- Escalate repeated technical failures that prevent customers from completing essential actions.
+- Support agents must not claim an issue has been escalated until an escalation action is actually confirmed.
+- If a policy does not cover a customer's situation, state that the available policy information is insufficient and request human review.

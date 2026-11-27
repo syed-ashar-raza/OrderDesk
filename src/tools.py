@@ -1,6 +1,7 @@
-﻿"""Application tools available to the OrderDesk AI agents."""
+"""Application tools available to the OrderDesk AI agents."""
 
 from src.database import ORDERS
+from src.policy_retriever import search_policy_docs
 
 
 def lookup_order_status(order_id: str) -> dict:

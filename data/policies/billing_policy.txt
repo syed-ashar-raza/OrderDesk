@@ -1,0 +1,10 @@
+﻿# Billing Policy
+This is a fictional policy for the OrderDesk demonstration.
+
+- Customers reporting duplicate charges should provide their order ID and payment details through the approved secure support channel.
+- A pending card authorization may temporarily appear alongside a completed charge.
+- Pending authorizations are generally released by the payment provider within 5 to 10 business days.
+- Actual settlement and release times depend on the customer's bank or payment provider.
+- Support agents must not claim that a duplicate charge has been reversed without verified confirmation.
+- Unresolved duplicate charges must be referred to the billing support team.
+- Customers must never share full card numbers, passwords, or security codes in support tickets.

@@ -1,0 +1,11 @@
+﻿# Refund Policy
+This is a fictional policy for the OrderDesk demonstration.
+
+- Orders with Delivered or Cancelled status qualify for refund review.
+- Refund review eligibility does not mean a refund has been approved or processed.
+- For delivered orders, customers should request a refund review within 30 calendar days of delivery.
+- Returned items must be unused and include their original packaging, unless the item is defective.
+- Refund approval requires review by the support team.
+- After approval, refunds are issued to the original payment method.
+- Refund processing typically takes 5 to 10 business days after approval.
+- Support agents must never claim that a refund was approved or processed without verified confirmation.

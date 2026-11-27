@@ -1,9 +1,9 @@
-﻿"""Build customer replies using verified ticket and tool data."""
+"""Build customer replies using verified ticket and tool data."""
 
 from datetime import date, datetime
 
 
-def build_customer_reply(ticket: dict, tool_calls: list[dict]) -> str:
+def _build_base_customer_reply(ticket: dict, tool_calls: list[dict]) -> str:
     """Create a factual customer reply without unsupported commitments."""
 
     results = {
@@ -86,6 +86,38 @@ def build_customer_reply(ticket: dict, tool_calls: list[dict]) -> str:
         )
         return reply
 
+    ticket_text = (
+        f"{ticket.get('subject', '')} {ticket.get('body', '')}"
+    ).lower()
+
+    duplicate_charge_terms = (
+        "charged twice",
+        "duplicate charge",
+        "double charge",
+        "charged two times",
+        "same purchase",
+    )
+
+    if category == "billing" and any(
+        term in ticket_text for term in duplicate_charge_terms
+    ):
+        return (
+            "Thank you for reporting the duplicate charge. "
+            "We cannot currently verify whether both entries represent "
+            "completed charges or whether one is a pending authorization. "
+            "According to our demo billing policy, a pending authorization "
+            "may temporarily appear alongside a completed charge. Such "
+            "authorizations are generally released within 5 to 10 business "
+            "days, although the actual timing depends on your bank or "
+            "payment provider.\n\n"
+            "If the duplicate charge remains unresolved, the policy "
+            "requires referral to the billing support team. This triage "
+            "does not confirm that a referral has been made. Please use "
+            "the approved secure support channel for payment details; "
+            "never share your full card number, password, or security code "
+            "in a support ticket."
+        )
+
     if category == "bug":
         return (
             "Thank you for reporting this technical issue. We understand "
@@ -102,3 +134,42 @@ def build_customer_reply(ticket: dict, tool_calls: list[dict]) -> str:
         "any additional action or outcome, but your reported issue has been "
         "captured in this triage result."
     )
+
+
+def build_customer_reply(ticket: dict, tool_calls: list[dict]) -> str:
+    """Build a deterministic reply and attach actual retrieved policy evidence."""
+    reply = _build_base_customer_reply(ticket, tool_calls)
+
+    retrieval_entries = [
+        entry for entry in tool_calls
+        if entry.get("tool") == "search_policy_docs"
+    ]
+
+    if not retrieval_entries:
+        return reply
+
+    result = retrieval_entries[-1].get("result", {})
+    policy_results = result.get("results", [])
+
+    if not result.get("found") or not policy_results:
+        return (
+            reply
+            + "\n\n**Policy verification:** The available policy information "
+            "does not establish the rule for this situation. Human review is "
+            "recommended; no policy outcome can be confirmed."
+        )
+
+    evidence_lines = [
+        "\n\n**Policy evidence retrieved:**"
+    ]
+
+    for item in policy_results:
+        source = item.get("source", "Unknown source")
+        chunk_id = item.get("chunk_id", "Unknown chunk")
+        content = item.get("content", "")
+        evidence_lines.append(
+            f"\n- Source: `{source}` | Chunk: `{chunk_id}`"
+            f"\n  Evidence: {content}"
+        )
+
+    return reply + "".join(evidence_lines)

@@ -1,4 +1,4 @@
-﻿"""Multi-turn tool orchestration for the TicketPilot agent."""
+"""Multi-turn tool orchestration for the TicketPilot agent."""
 
 import json
 import logging
@@ -15,6 +15,7 @@ from src.tools import (
     check_refund_eligibility,
     classify_ticket_category,
     lookup_order_status,
+    search_policy_docs,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ TOOL_FUNCTIONS = {
     "lookup_order_status": lookup_order_status,
     "classify_ticket_category": classify_ticket_category,
     "check_refund_eligibility": check_refund_eligibility,
+    "search_policy_docs": search_policy_docs,
 }
 
 
@@ -73,6 +75,46 @@ def run_ticket_triage(
         tool_calls = assistant_message.tool_calls or []
 
         if not tool_calls:
+            retrieval_done = any(
+                entry.get("tool") == "search_policy_docs"
+                for entry in tool_calls_log
+            )
+
+            if _requires_policy_retrieval(ticket_text) and not retrieval_done:
+                if tool_rounds >= max_tool_rounds:
+                    return {
+                        "ticket_id": ticket_id,
+                        "category": None,
+                        "reply": "",
+                        "tool_calls": tool_calls_log,
+                        "tool_rounds": tool_rounds,
+                        "status": "safety_cap_reached",
+                    }
+
+                print(f"\\n[TICKET {ticket_id}] ENFORCED POLICY RETRIEVAL")
+                try:
+                    retrieval_query = f"Subject: {subject}\nIssue: {body}"
+                    result = search_policy_docs(retrieval_query, top_k=3)
+                except (RuntimeError, ValueError, TypeError) as exc:
+                    result = {"found": False, "error": str(exc), "results": []}
+
+                print("Result:", json.dumps(result, default=str))
+                tool_calls_log.append({
+                    "tool": "search_policy_docs",
+                    "arguments": {"query": retrieval_query, "top_k": 3},
+                    "result": result,
+                })
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Mandatory policy retrieval has now been performed. "
+                        "Review this evidence before producing your final response: "
+                        + json.dumps(result, default=str)
+                    ),
+                })
+                tool_rounds += 1
+                continue
+
             return {
                 "ticket_id": ticket_id,
                 "category": _extract_category(assistant_message.content) or _category_from_tool_calls(tool_calls_log),
@@ -124,6 +166,12 @@ def run_ticket_triage(
                     if not isinstance(arguments, dict):
                         raise ValueError("Tool arguments must be a JSON object.")
 
+                    if function_name == "search_policy_docs":
+                        arguments["query"] = (
+                            f"Subject: {subject}\nIssue: {body}"
+                        )
+                        arguments["top_k"] = 3
+
                     print(
                         f"\n[TICKET {ticket_id}] TOOL: {function_name}"
                     )
@@ -153,6 +201,19 @@ def run_ticket_triage(
             )
 
         tool_rounds += 1
+
+
+
+def _requires_policy_retrieval(ticket_text: str) -> bool:
+    """Identify tickets requiring policy evidence before a reply."""
+    terms = (
+        "refund", "return", "shipping", "shipment", "delivery",
+        "delivered", "deadline", "business day", "policy",
+        "duplicate charge", "charged twice", "billing rule",
+        "damaged", "defective", "escalat",
+    )
+    normalized = ticket_text.lower()
+    return any(term in normalized for term in terms)
 
 
 def _category_from_tool_calls(tool_calls_log: list[dict]) -> str | None:

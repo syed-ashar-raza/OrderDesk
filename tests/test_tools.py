@@ -1,4 +1,4 @@
-﻿"""Tests for OrderDesk tools, schemas, and TicketPilot orchestration."""
+"""Tests for OrderDesk tools, schemas, and TicketPilot orchestration."""
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -96,12 +96,13 @@ def test_unknown_order_refund_eligibility():
 def test_groq_tool_schemas_are_valid():
     from src.schema import ORDER_TOOLS
 
-    assert len(ORDER_TOOLS) == 3
+    assert len(ORDER_TOOLS) == 4
 
     expected = {
         "lookup_order_status": "order_id",
         "classify_ticket_category": "text",
         "check_refund_eligibility": "order_id",
+        "search_policy_docs": "query",
     }
 
     for tool in ORDER_TOOLS:
@@ -191,6 +192,10 @@ def test_agent_supports_multiple_tool_rounds():
             "Tools used: lookup_order_status, check_refund_eligibility\n"
             "Reply: Your order qualifies for a refund review."
         ),
+        make_final_response(
+            "Category: billing\\n"
+            "Policy evidence reviewed. Final response ready."
+        ),
     ])
 
     ticket = {
@@ -204,11 +209,13 @@ def test_agent_supports_multiple_tool_rounds():
     result = run_ticket_triage(ticket, client)
 
     assert result["status"] == "completed"
-    assert result["tool_rounds"] == 2
-    assert len(result["tool_calls"]) == 2
+    assert result["tool_rounds"] == 3
+    assert len(result["tool_calls"]) == 3
     assert result["category"] == "billing"
     assert result["tool_calls"][0]["tool"] == "lookup_order_status"
     assert result["tool_calls"][1]["tool"] == "check_refund_eligibility"
+    assert result["tool_calls"][2]["tool"] == "search_policy_docs"
+    assert "refund_policy.txt" in result["reply"]
 
 
 def test_agent_enforces_tool_round_safety_cap():

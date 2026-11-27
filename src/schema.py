@@ -1,4 +1,4 @@
-﻿"""OpenAI-compatible tool schemas for OrderDesk."""
+"""OpenAI-compatible tool schemas for OrderDesk."""
 
 ORDER_TOOLS = [
     {
@@ -65,4 +65,35 @@ ORDER_TOOLS = [
             },
         },
     },
+
+    {
+        "type": "function",
+        "function": {
+            "name": "search_policy_docs",
+            "description": (
+                "Search the OrderDesk policy knowledge base using semantic "
+                "similarity. MUST be called before drafting replies involving "
+                "refunds, returns, shipping deadlines, timelines, or policy rules. "
+                "Use retrieved policy content as evidence and never invent rules."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The customer's policy-related question or ticket context."
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of policy chunks to retrieve.",
+                        "minimum": 1,
+                        "maximum": 5
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False
+            }
+        }
+    },
+
 ]
