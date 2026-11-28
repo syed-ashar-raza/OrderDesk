@@ -155,6 +155,7 @@ _STOP_WORDS = {
     "orderdesk", "company", "customers", "customer", "order",
     "cover", "take", "standard", "inconvenience", "please", "tell", "same", "purchase", "investigate", "issue", "reported", "arrived", "yet", "current", "date", "provided", "email", "subject", "body",
     "orders", "policy", "has", "not", "status", "ticket", "id",
+    "request", "longer", "need", "receive", "whether", "check",
 }
 
 _SYNONYM_GROUPS = (

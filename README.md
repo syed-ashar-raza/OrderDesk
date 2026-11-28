@@ -95,6 +95,54 @@ The system avoids unsupported claims about:
 - Engineering-team notifications.
 - Policy rules not supported by retrieved evidence.
 
+
+### Week 4 - API, Evaluations, and Guardrails
+- FastAPI service with POST /triage and GET /health endpoints.
+- Pydantic request validation, including rejection of empty subject and body fields.
+- Exception handling with clear HTTP error responses.
+- Classification-confidence and policy-evidence escalation guardrails.
+- Human-review escalation when confidence is low or required policy evidence is unavailable.
+- Twelve-ticket evaluation dataset with expected categories, policy topics, and escalation outcomes.
+- Automated evaluation reporting category accuracy and overall pass rate.
+- JSON Lines request logging containing ticket ID, category, tools used, and timestamp.
+- Customer message content and personal information are excluded from request logs.
+
+## Week 4 API
+
+Start the API server:
+
+`python -m uvicorn src.api:app --host 127.0.0.1 --port 8000`
+
+Health endpoint: `GET /health`
+
+Triage endpoint: `POST /triage`
+
+Example request:
+
+`{"ticket_id":"WEEK4-001","subject":"Refund not received","body":"I returned order A125 but have not received my refund.","order_id":"A125"}`
+
+The response includes category, drafted reply, tools used, policy sources, classification confidence, escalation decision, escalation reason, tool rounds, and execution status.
+
+### Evaluation
+
+Run:
+
+`python evaluate.py`
+
+Latest verified evaluation:
+- Tickets evaluated: 12
+- Tickets passed: 12/12
+- Category accuracy: 100%
+- Overall pass rate: 100%
+
+These results apply to the included demonstration dataset only.
+
+### Request Logging
+
+Successful triage requests are recorded in `logs/triage_requests.jsonl`.
+
+Each record contains a timestamp, ticket ID, category, and tools used. Customer message content and personal information are excluded.
+
 ## Technology Stack
 
 - Python 3.14
@@ -164,7 +212,7 @@ Run the full test suite:
 
 `python -m pytest -v`
 
-Latest verified result: **39 passed**.
+Latest verified result: **43 passed**.
 
 Coverage includes:
 
@@ -234,7 +282,7 @@ Coverage includes:
 | Embedding-cache reuse | Verified |
 | Unsupported-policy abstention | Verified |
 | Deterministic policy-grounded replies | Verified |
-| Automated tests | 39 passed |
+| Automated tests | 43 passed |
 
 ---
 

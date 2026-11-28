@@ -349,3 +349,88 @@ def test_bug_reply_does_not_claim_engineering_notification():
     assert "technical issue" in reply
     assert "do not confirm whether an engineering team has been notified" in reply
     assert "engineering team has been notified and is working" not in reply
+
+
+# WEEK 4: STRUCTURED ESCALATION GUARDRAILS
+
+from src.agent.triage_agent import _get_escalation_decision
+
+
+def test_guardrail_allows_confident_ticket_with_policy_evidence():
+    ticket_text = "Subject: Refund request\nIssue: Please check my refund."
+    calls = [
+        {
+            "tool": "classify_ticket_category",
+            "result": {"category": "billing", "confidence": 0.90},
+        },
+        {
+            "tool": "search_policy_docs",
+            "result": {
+                "found": True,
+                "results": [{"source": "refund_policy.txt"}],
+            },
+        },
+    ]
+
+    result = _get_escalation_decision(ticket_text, calls, "completed")
+
+    assert result["escalated"] is False
+    assert result["outcome"] == "completed"
+    assert result["classification_confidence"] == 0.90
+    assert result["escalation_reason"] is None
+
+
+def test_guardrail_escalates_low_classification_confidence():
+    ticket_text = "Subject: Unknown issue\nIssue: Please help."
+    calls = [
+        {
+            "tool": "classify_ticket_category",
+            "result": {"category": "other", "confidence": 0.30},
+        },
+    ]
+
+    result = _get_escalation_decision(ticket_text, calls, "completed")
+
+    assert result["escalated"] is True
+    assert result["outcome"] == "escalate_to_human"
+    assert "confidence" in result["escalation_reason"]
+
+
+def test_guardrail_escalates_when_policy_evidence_is_missing():
+    ticket_text = "Subject: Refund request\nIssue: Please check my refund."
+    calls = [
+        {
+            "tool": "classify_ticket_category",
+            "result": {"category": "billing", "confidence": 0.90},
+        },
+        {
+            "tool": "search_policy_docs",
+            "result": {"found": False, "results": []},
+        },
+    ]
+
+    result = _get_escalation_decision(ticket_text, calls, "completed")
+
+    assert result["escalated"] is True
+    assert result["outcome"] == "escalate_to_human"
+    assert "policy evidence" in result["escalation_reason"]
+
+
+def test_guardrail_escalates_when_safety_cap_is_reached():
+    ticket_text = "Subject: Payment issue\nIssue: My payment failed."
+    calls = [
+        {
+            "tool": "classify_ticket_category",
+            "result": {"category": "billing", "confidence": 0.65},
+        },
+    ]
+
+    result = _get_escalation_decision(
+        ticket_text,
+        calls,
+        "safety_cap_reached",
+    )
+
+    assert result["escalated"] is True
+    assert result["outcome"] == "escalate_to_human"
+    assert "safety limit" in result["escalation_reason"]

@@ -5,3 +5,7 @@ __pycache__/
 .pytest_cache/
 
 data/triage_results.json
+
+# Runtime logs and temporary backups
+logs/*.jsonl
+*.week3-backup

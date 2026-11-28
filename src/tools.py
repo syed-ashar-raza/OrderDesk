@@ -1,5 +1,7 @@
 """Application tools available to the OrderDesk AI agents."""
 
+import re
+
 from src.database import ORDERS
 from src.policy_retriever import search_policy_docs
 
@@ -30,11 +32,12 @@ def lookup_order_status(order_id: str) -> dict:
 
 
 def classify_ticket_category(text: str) -> dict:
-    """Classify a support ticket using deterministic keyword rules."""
+    """Classify a ticket using deterministic keywords and heuristic confidence."""
 
     if not isinstance(text, str) or not text.strip():
         return {
             "category": "other",
+            "confidence": 0.0,
             "reason": "Ticket text is empty or invalid.",
         }
 
@@ -60,17 +63,23 @@ def classify_ticket_category(text: str) -> dict:
         matched = [
             keyword
             for keyword in keywords[category]
-            if keyword in normalized_text
+            if re.search(
+                r"(?<!\w)" + re.escape(keyword) + r"(?!\w)",
+                normalized_text,
+            )
         ]
 
         if matched:
+            confidence = 0.90 if len(matched) >= 2 else 0.65
             return {
                 "category": category,
+                "confidence": confidence,
                 "reason": f"Matched keywords: {', '.join(matched)}",
             }
 
     return {
         "category": "other",
+        "confidence": 0.30,
         "reason": "No category-specific keywords matched.",
     }
 

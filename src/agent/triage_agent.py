@@ -85,10 +85,11 @@ def run_ticket_triage(
                     return {
                         "ticket_id": ticket_id,
                         "category": None,
-                        "reply": "",
+                        "reply": "Automated triage could not safely complete this request. Human review is recommended; no team has been notified.",
                         "tool_calls": tool_calls_log,
                         "tool_rounds": tool_rounds,
                         "status": "safety_cap_reached",
+                    **_get_escalation_decision(ticket_text, tool_calls_log, "safety_cap_reached"),
                     }
 
                 print(f"\\n[TICKET {ticket_id}] ENFORCED POLICY RETRIEVAL")
@@ -118,10 +119,11 @@ def run_ticket_triage(
             return {
                 "ticket_id": ticket_id,
                 "category": _extract_category(assistant_message.content) or _category_from_tool_calls(tool_calls_log),
-                "reply": build_customer_reply(ticket, tool_calls_log),
+                "reply": _build_guarded_reply(ticket, tool_calls_log, ticket_text),
                 "tool_calls": tool_calls_log,
                 "tool_rounds": tool_rounds,
                 "status": "completed",
+               **_get_escalation_decision(ticket_text, tool_calls_log, "completed"),
             }
 
         if tool_rounds >= max_tool_rounds:
@@ -133,10 +135,11 @@ def run_ticket_triage(
             return {
                 "ticket_id": ticket_id,
                 "category": None,
-                "reply": "",
+                "reply": "Automated triage could not safely complete this request. Human review is recommended; no team has been notified.",
                 "tool_calls": tool_calls_log,
                 "tool_rounds": tool_rounds,
                 "status": "safety_cap_reached",
+                    **_get_escalation_decision(ticket_text, tool_calls_log, "safety_cap_reached"),
             }
 
         messages.append(
@@ -211,8 +214,10 @@ def _requires_policy_retrieval(ticket_text: str) -> bool:
         "delivered", "deadline", "business day", "policy",
         "duplicate charge", "charged twice", "billing rule",
         "damaged", "defective", "escalat",
+        "payment declined", "declined", "card payment",
     )
     normalized = ticket_text.lower()
+    normalized = normalized.replace("delivery address", "")
     return any(term in normalized for term in terms)
 
 
@@ -263,3 +268,94 @@ def create_groq_client() -> Groq:
         raise RuntimeError("GROQ_API_KEY is missing from .env")
 
     return Groq(api_key=api_key)
+
+
+def _classification_confidence_from_tool_calls(
+    tool_calls_log: list[dict],
+    ticket_text: str,
+) -> float:
+    """Return classifier confidence, with a deterministic fallback."""
+
+    for entry in reversed(tool_calls_log):
+        if entry.get("tool") == "classify_ticket_category":
+            result = entry.get("result", {})
+            if isinstance(result, dict):
+                confidence = result.get("confidence")
+                if isinstance(confidence, (int, float)):
+                    return float(confidence)
+
+    result = classify_ticket_category(ticket_text)
+    return float(result.get("confidence", 0.0))
+
+
+def _get_escalation_decision(
+    ticket_text: str,
+    tool_calls_log: list[dict],
+    status: str,
+) -> dict:
+    """Determine whether a ticket must be escalated for human review."""
+
+    confidence = _classification_confidence_from_tool_calls(
+        tool_calls_log,
+        ticket_text,
+    )
+    reasons = []
+
+    if status == "safety_cap_reached":
+        reasons.append("The agent reached its tool-round safety limit.")
+
+    if confidence < 0.65:
+        reasons.append("Classification confidence is below the 0.65 threshold.")
+
+    if _requires_policy_retrieval(ticket_text):
+        retrieval_entries = [
+            entry for entry in tool_calls_log
+            if entry.get("tool") == "search_policy_docs"
+        ]
+
+        if not retrieval_entries:
+            reasons.append("Required policy retrieval was not performed.")
+        else:
+            result = retrieval_entries[-1].get("result", {})
+            if (
+                not isinstance(result, dict)
+                or not result.get("found")
+                or not result.get("results")
+            ):
+                reasons.append("Required policy evidence was unavailable.")
+
+    escalated = bool(reasons)
+
+    return {
+        "classification_confidence": confidence,
+        "escalated": escalated,
+        "outcome": "escalate_to_human" if escalated else "completed",
+        "escalation_reason": "; ".join(reasons) if reasons else None,
+    }
+
+
+
+def _build_guarded_reply(
+    ticket: dict,
+    tool_calls_log: list[dict],
+    ticket_text: str,
+) -> str:
+    """Prevent unsupported customer replies when escalation is required."""
+
+    decision = _get_escalation_decision(
+        ticket_text,
+        tool_calls_log,
+        "completed",
+    )
+
+    if decision["escalated"]:
+        reason = decision["escalation_reason"]
+        return (
+            "Thank you for contacting OrderDesk Support. "
+            "Automated triage could not safely confirm an outcome "
+            "for this request. Human review is recommended. "
+            "No human team has been notified by this system. "
+            f"Reason: {reason}"
+        )
+
+    return build_customer_reply(ticket, tool_calls_log)
